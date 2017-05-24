@@ -1,0 +1,77 @@
+www_src:
+    image: dr.yt.com/www_public:0.8
+    volumes:
+        - /var/www/
+
+app:
+  image: jinwoo/nginx_lua:1.10.3
+
+  volumes:
+    #   - ./files/etc/nginx/dockergen_nginx.tmpl:/etc/nginx/dockergen_nginx.tmpl
+    #   - ./files/etc/nginx/lua:/etc/nginx/lua/
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    # - ./conf/certs/:/etc/nginx/certs
+    # - ./conf/nginx_default.conf:/etc/nginx/nginx.conf
+    # - ./logs:/var/log/nginx/
+    # - /var/run/docker.sock:/tmp/docker.sock:ro
+    # - /tmp/docker:/tmp/docker
+    # - /etc/localtime:/etc/localtime:ro
+    # - ./conf/vhost.d:/etc/nginx/vhost.d:ro
+
+  ports:
+   - "80:80"
+   - "8080:8080"
+   - "443:443"
+
+  volumes_from:
+   - www_src
+
+  environment:
+   #  VIRTUAL_HOST: carem.test.co, carea.test.co
+   #  CERT_NAME: server
+    USE_DOCKERGEN: "no"
+    NGINX_ALLOW_IP: "1.214.197.106 112.169.122.203 100.100.0.0/16 172.16.0.0/16"
+    DOCKER_HOST: unix:///tmp/docker.sock
+    WEBROOT: "/var/www/public/"
+    #UPSTREAM: "php_green:9001"
+    UPSTREAM: "php:9000;"
+    UPSTREAM_NAME: "php_upstream"
+    # NGINX_LOG_OUTPUT: "file"
+    DEBUG: "*"
+    LOCATION: |
+            location = /pools {
+                allow 127.0.0.1;
+                allow 172.17.0.0/16;
+                allow 100.100.0.0/16;
+                content_by_lua '
+                    local cjson = require("cjson")
+                    local pools, err = api:get_pools()
+                    if not pools then
+                        ngx.print(cjson.encode(err))
+                        ngx.status = 200
+                    else
+                        ngx.print(cjson.encode(pools))
+                    end
+                ';
+                }
+    #PATH: "/usr/local/node/bin:$PATH"
+
+php:
+    image: jinwoo/php7:7.0.12
+  #command: bash -c "while [ 0 ]; do sleep 1;done"
+    # volumes_from:
+    #   - www_src
+
+    volumes:
+      - ./www_blue:/var/www/public
+      - ./logs:/var/log/nginx
+      - /etc/localtime:/etc/localtime:ro
+
+    ports:
+      - "9000:9000"
+
+    environment:
+      FPM_USER: "www-data"
+      FPM_GROUP: "www-data"
+      FPM_LISTEN: "0.0.0.0:9000"
+      USE_DOCKERIZE: "yes"

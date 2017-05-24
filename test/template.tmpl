@@ -1,0 +1,10 @@
+{{ range $ipaddr :=  split .Env.NGINX_ALLOW_IP " " }}
+    {{ if ne $ipaddr "" }}
+        {{ printf "allow %v;" $ipaddr }}
+    {{ end }}
+{{end}}
+{{ range $ipaddr :=  split .Env.NGINX_DENY_IP " " }}
+    {{ if ne $ipaddr "" }}
+        {{ printf "deny %v;" $ipaddr }}
+    {{ end }}
+{{end}}

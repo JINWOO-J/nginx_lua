@@ -1,0 +1,167 @@
+upstream php_upstream {
+        server  php_blue:9000;server php_green:9001;
+}
+
+
+
+server {
+
+    listen 80 ;
+
+    server_name default;
+
+    #access_log  /var/log/nginx/default-access.log main;
+    #error_log   /var/log/nginx/default-error.log error;
+
+    access_log /dev/stdout main;
+    error_log /dev/stderr error;
+
+
+    root /var/www/public/;
+
+    index index.html index.php index.htm;
+
+    location / {
+        #try_files $uri $uri/ =404;
+        try_files $uri $uri/ /index.php?$query_string;
+        proxy_pass_header api_key;
+    }
+
+    location ~ [^/]\.php(/|$) {
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_index /index.php;
+        include fastcgi_params;
+        #fastcgi_intercept_errors on;
+        fastcgi_split_path_info       ^(.+\.php)(/.+)$;
+        fastcgi_param PATH_INFO       $fastcgi_path_info;
+        fastcgi_param PATH_TRANSLATED $document_root$fastcgi_path_info;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        try_files   $uri =404;
+        fastcgi_pass php_upstream;
+    }
+
+    location /robots.txt {
+        allow all;
+        log_not_found off;
+        access_log off;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+
+    location = /upstreamstatus {
+        lua_code_cache off;
+        allow 127.0.0.1;
+        allow 172.17.42.1;
+        allow 59.6.152.75;
+        allow 61.106.236.253;
+        allow 192.168.99.0/24;
+        allow 100.100.100.0/24;
+        default_type text/html;
+        content_by_lua_file /etc/nginx/lua/upstreamstatus.lua;
+    }
+
+    location = /upstream_json{
+        lua_code_cache off;
+        allow 127.0.0.1;
+        allow 172.17.42.1;
+        allow 59.6.152.75;
+        allow 61.106.236.253;
+        allow 121.130.24.94;
+        allow 192.168.99.0/24;
+        allow 172.17.0.0/16;
+        allow 100.100.100.0/24;
+        access_log off;
+        default_type application/json;
+        content_by_lua_file /etc/nginx/lua/upstream_json.lua;
+    }
+    location ~ /status_page($|/) {
+        allow 127.0.0.1;
+        allow 172.17.0.1;
+        allow 192.168.99.0/24;
+        allow 100.100.100.0/24;
+        default_type "text/html";
+        alias /etc/nginx/lua/status_page.html;
+        access_log   off;
+    }
+    location /status {
+        allow 127.0.0.1;
+        allow 192.168.99.0/24;
+        allow 100.100.100.0/24;
+        access_log off;
+#        deny all;
+        check_status;
+    }
+    location = /upstreams {
+        allow 127.0.0.1;
+        allow 172.17.42.1;
+        allow 59.6.152.75;
+        allow 61.106.236.253;
+        allow 121.130.24.94;
+        allow 192.168.99.0/24;
+        allow 100.100.100.0/24;
+        default_type text/html;
+        lua_code_cache off;
+        content_by_lua_file /etc/nginx/lua/upstream_jjw.lua;
+    }
+
+
+    location /vtstatus {
+        vhost_traffic_status_display;
+        vhost_traffic_status_display_format html;
+        #excluded from the status traffic
+        vhost_traffic_status_bypass_limit on;
+        vhost_traffic_status_bypass_stats on;
+        allow 100.100.0.0/16;
+        allow 222.231.15.220;
+        allow 211.233.45.167;
+        allow 127.0.0.1;
+        access_log off;
+        # deny all;
+    }
+
+
+    location ~ /nginx_status($|/) {
+        stub_status on;
+        access_log   off;
+        allow 100.100.0.0/16;
+        allow 222.231.15.220;
+        allow 211.233.45.167;
+        allow 127.0.0.1;
+        allow 127.0.0.1;
+        # deny all;
+    }
+
+
+    location = /php_status {
+        include fastcgi_params;
+        access_log   off;
+        fastcgi_param SCRIPT_FILENAME /php_status;
+        fastcgi_pass php_upstream;
+        allow 100.100.0.0/16;
+        allow 222.231.15.220;
+        allow 211.233.45.167;
+        allow 127.0.0.1;
+        allow 127.0.0.1;
+        deny all;
+    }
+
+    location = /pools {
+    allow 127.0.0.1;
+    allow 172.17.0.0/16;
+    allow 100.100.0.0/16;
+    content_by_lua '
+        local cjson = require("cjson")
+        local pools, err = api:get_pools()
+        if not pools then
+            ngx.print(cjson.encode(err))
+            ngx.status = 200
+        else
+            ngx.print(cjson.encode(pools))
+        end
+    ';
+    }
+
+}
+

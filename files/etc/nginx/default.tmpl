@@ -1,0 +1,172 @@
+upstream {{ .Env.UPSTREAM_NAME }} {
+        server  {{ .Env.UPSTREAM }};
+}
+
+{{ .Env.USE_DEFAULT_SERVER_CONF }}
+
+server {
+
+    listen 80 ;
+
+    server_name {{ .Env.DOMAIN }};
+
+    #access_log  /var/log/nginx/{{.Env.DOMAIN}}-access.log main;
+    #error_log   /var/log/nginx/{{.Env.DOMAIN}}-error.log error;
+{{ if eq .Env.NGINX_LOG_OUTPUT "stdout" }}
+    access_log /dev/stdout main;
+    error_log /dev/stderr error;
+{{ else if eq  .Env.NGINX_LOG_OUTPUT "file"}}
+    access_log  /var/log/nginx/{{.Env.DOMAIN}}-access.log main;
+    error_log   /var/log/nginx/{{.Env.DOMAIN}}-error.log error;
+{{ end }}
+
+    root {{ .Env.WEBROOT }};
+
+    index index.html index.php index.htm;
+
+    location / {
+        #try_files $uri $uri/ =404;
+{{ range $ipaddr :=  split .Env.NGINX_DENY_IP " " }}
+    {{ if ne $ipaddr "" }}
+        {{ printf "allow %v;" $ipaddr }}
+    {{ end }}
+{{end}}
+
+        try_files $uri $uri/ /index.php?$query_string;
+        proxy_pass_header api_key;
+    }
+
+    location ~ [^/]\.php(/|$) {
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_index /index.php;
+        include fastcgi_params;
+        #fastcgi_intercept_errors on;
+        fastcgi_split_path_info       ^(.+\.php)(/.+)$;
+        fastcgi_param PATH_INFO       $fastcgi_path_info;
+        fastcgi_param PATH_TRANSLATED $document_root$fastcgi_path_info;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        try_files   $uri =404;
+        fastcgi_pass {{ .Env.UPSTREAM_NAME }};
+    }
+
+    location /robots.txt {
+        allow all;
+        log_not_found off;
+        access_log off;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+
+    location = /upstreamstatus {
+        lua_code_cache off;
+        allow 127.0.0.1;
+{{ range $ipaddr :=  split .Env.NGINX_ALLOW_IP " " }}
+    {{ if ne $ipaddr "" }}
+        {{ printf "allow %v;" $ipaddr }}
+    {{ end }}
+{{end}}
+        default_type text/html;
+        content_by_lua_file /etc/nginx/lua/upstreamstatus.lua;
+    }
+
+    location = /upstream_json{
+        lua_code_cache off;
+{{ range $ipaddr :=  split .Env.NGINX_ALLOW_IP " " }}
+    {{ if ne $ipaddr "" }}
+        {{ printf "allow %v;" $ipaddr }}
+    {{ end }}
+{{end}}
+        access_log off;
+        default_type application/json;
+        content_by_lua_file /etc/nginx/lua/upstream_json.lua;
+    }
+
+    location ~ /status_page($|/) {
+        allow 127.0.0.1;
+{{ range $ipaddr :=  split .Env.NGINX_ALLOW_IP " " }}
+    {{ if ne $ipaddr "" }}
+        {{ printf "allow %v;" $ipaddr }}
+    {{ end }}
+{{end}}
+        default_type "text/html";
+        alias /etc/nginx/lua/status_page.html;
+        access_log   off;
+    }
+
+    location /status {
+        allow 127.0.0.1;
+{{ range $ipaddr :=  split .Env.NGINX_ALLOW_IP " " }}
+    {{ if ne $ipaddr "" }}
+        {{ printf "allow %v;" $ipaddr }}
+    {{ end }}
+{{end}}
+        access_log off;
+#        deny all;
+        check_status;
+    }
+    location = /upstreams {
+        allow 127.0.0.1;
+{{ range $ipaddr :=  split .Env.NGINX_ALLOW_IP " " }}
+    {{ if ne $ipaddr "" }}
+        {{ printf "allow %v;" $ipaddr }}
+    {{ end }}
+{{end}}
+        default_type text/html;
+        lua_code_cache off;
+        content_by_lua_file /etc/nginx/lua/upstream_jjw.lua;
+    }
+
+
+    location /vtstatus {
+        vhost_traffic_status_display;
+        vhost_traffic_status_display_format html;
+        #excluded from the status traffic
+        vhost_traffic_status_bypass_limit on;
+        vhost_traffic_status_bypass_stats on;
+{{ range $ipaddr :=  split .Env.NGINX_ALLOW_IP " " }}
+    {{ if ne $ipaddr "" }}
+        {{ printf "allow %v;" $ipaddr }}
+    {{ end }}
+{{end}}
+        allow 127.0.0.1;
+        access_log off;
+        # deny all;
+    }
+
+{{ if eq .Env.USE_NGINX_STATUS "yes" }}
+    location ~ /{{ .Env.NGINX_STATUS_URI }}($|/) {
+        stub_status on;
+        access_log   off;
+{{ range $ipaddr :=  split .Env.NGINX_ALLOW_IP " " }}
+    {{ if ne $ipaddr "" }}
+        {{ printf "allow %v;" $ipaddr }}
+    {{ end }}
+{{end}}
+
+        allow 127.0.0.1;
+        allow {{ .Env.NGINX_STATUS_URI_ALLOWIP }};
+        # deny all;
+    }
+{{ end }}
+{{ if eq .Env.USE_PHP_STATUS "yes" }}
+    location = /{{ .Env.PHP_STATUS_URI }} {
+        include fastcgi_params;
+        access_log   off;
+        fastcgi_param SCRIPT_FILENAME /{{ .Env.PHP_STATUS_URI }};
+        fastcgi_pass {{ .Env.UPSTREAM_NAME }};
+{{ range $ipaddr :=  split .Env.NGINX_ALLOW_IP " " }}
+    {{ if ne $ipaddr "" }}
+        {{ printf "allow %v;" $ipaddr }}
+    {{ end }}
+{{end}}
+
+        allow 127.0.0.1;
+        allow {{ .Env.PHP_STATUS_URI_ALLOWIP }};
+        deny all;
+    }
+{{ end }}
+    {{ .Env.LOCATION }}
+}
+{{ .Env.NGINX_EXTRACONF }}
