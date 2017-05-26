@@ -4,11 +4,12 @@ www_src:
         - /var/www/
 
 app:
-  image: jinwoo/nginx_lua:1.10.3
+  image: nginx_lua:1.10.3
 
   volumes:
+      - ./www:/var/www/public
     #   - ./files/etc/nginx/dockergen_nginx.tmpl:/etc/nginx/dockergen_nginx.tmpl
-    #   - ./files/etc/nginx/lua:/etc/nginx/lua/
+      - ./files/etc/nginx/lua:/etc/nginx/lua/
       - /var/run/docker.sock:/tmp/docker.sock:ro
     # - ./conf/certs/:/etc/nginx/certs
     # - ./conf/nginx_default.conf:/etc/nginx/nginx.conf
@@ -19,25 +20,28 @@ app:
     # - ./conf/vhost.d:/etc/nginx/vhost.d:ro
 
   ports:
-   - "80:80"
-   - "8080:8080"
-   - "443:443"
+     - "80:80"
+     - "8080:8080"
+     - "443:443"
 
   volumes_from:
-   - www_src
+     - www_src
+
+  links:
+     - php
 
   environment:
    #  VIRTUAL_HOST: carem.test.co, carea.test.co
    #  CERT_NAME: server
-    USE_DOCKERGEN: "no"
+    USE_DOCKERGEN: "yes"
     NGINX_ALLOW_IP: "1.214.197.106 112.169.122.203 100.100.0.0/16 172.16.0.0/16"
     DOCKER_HOST: unix:///tmp/docker.sock
     WEBROOT: "/var/www/public/"
     #UPSTREAM: "php_green:9001"
-    UPSTREAM: "php:9000;"
+    UPSTREAM: "php:9000"
     UPSTREAM_NAME: "php_upstream"
     # NGINX_LOG_OUTPUT: "file"
-    DEBUG: "*"
+    DEBUG: "yes"
     LOCATION: |
             location = /pools {
                 allow 127.0.0.1;
@@ -56,14 +60,14 @@ app:
                 }
     #PATH: "/usr/local/node/bin:$PATH"
 
+
 php:
     image: jinwoo/php7:7.0.12
   #command: bash -c "while [ 0 ]; do sleep 1;done"
     # volumes_from:
     #   - www_src
-
     volumes:
-      - ./www_blue:/var/www/public
+      - ./www:/var/www/public
       - ./logs:/var/log/nginx
       - /etc/localtime:/etc/localtime:ro
 

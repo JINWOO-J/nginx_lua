@@ -94,7 +94,7 @@ http {
 
 {{ if eq .Env.NGINX_LOG_OUTPUT "stdout" }}
     access_log /dev/stdout main;
-    error_log /dev/stderr error;
+    error_log /dev/stdout error;
 {{ else if eq  .Env.NGINX_LOG_OUTPUT "file"}}
     access_log /var/log/nginx/access.log main;
     error_log /var/log/nginx/error.log error;

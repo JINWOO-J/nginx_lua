@@ -116,77 +116,80 @@ function status_parsing()
     end
 
      local health_check, error2 = json_call2("http://localhost/status?format=json")
-
      local down_count = health_check.servers.generation
-
-     -- ngx.print(down_count);
-
-    --ngx.say("result=", DataDumper(health_check) , "<br>")
-
-
+      -- ngx.print(down_count);
+      --ngx.say("result=", DataDumper(health_check) , "<br>")
     local result, error = json_call2("http://localhost/vtstatus/format/json","GET")
-
     for i in pairs(result.upstreamZones) do
-
         for k in pairs(result.upstreamZones[i]) do
-
     --      ngx.print(i , ",", k , " <br>")
-
         if down_count > 0 then
            for ii in pairs(health_check.servers.server) do
               local name     = health_check.servers.server[ii].name
               local upstream = health_check.servers.server[ii].upstream
               local status   = health_check.servers.server[ii].status
-
               if status == "down" and result.upstreamZones[i][k].server == name and i == upstream   then
                  result.upstreamZones[i][k].down = "down"
-
               end
             end
         end
-
     --      if down_count > 0  and
-
             result.upstreamZones[i][k].dyn_status = dyn_status[result.upstreamZones[i][k].server]
         end
     end
-
     local result = json.encode(result)
     -- ngx.log(ngx.ERR, result)
     local upstream_status_dict = ngx.shared.upstream_status_dict;
     upstream_status_dict:set("status_json",result)
 end
 
+function tablelength(T)
+  local count = 0
+  for _ in pairs(T) do count = count + 1 end
+  return count
+end
 
-
+function dump(o)
+   if type(o) == 'table' then
+      local s = '{ '
+      for k,v in pairs(o) do
+         if type(k) ~= 'number' then k = '"'..k..'"' end
+         s = s .. '['..k..'] = ' .. dump(v) .. ','
+      end
+      return s .. '} '
+   else
+      return tostring(o)
+   end
+end
 
 local delay = 1
 local worker_pid = ngx.worker.pid()
+local worker_id = ngx.worker.id()
+-- worker_pid_dict:flush_all()
+ngx.shared.worker_pid_dict:safe_set(worker_id , worker_pid , 0)
+ngx.log(ngx.ERR, "worker_pid (", worker_id ,") : " , worker_pid , " / ")
 
-worker_pid_dict:set(worker_pid , worker_pid, 0 )
-
-worker_pid_dict:set("status_parsing_worker" , worker_pid, 0 )
-
+local ngx_worker_count = ngx.worker.count()
 
 local handler
 handler = function (premature)
     -- do some routine job in Lua just like a cron job
 
+    -- for i=0, ngx_worker_count - 1 do
+    --     local worker_pid = ngx.shared.worker_pid_dict:get(i)
+    --     ngx.log(ngx.ERR, "worker_pid : (", i ,") " , worker_pid , " / ")
+    -- end
 
-    local status_parsing_worker = worker_pid_dict:get("status_parsing_worker");
-
-
-
+    local status_parsing_worker = ngx.shared.worker_pid_dict:get(0)  -- 처음 worker로 status_parsing
     if  worker_pid ==  status_parsing_worker then
-      status_parsing();
-      -- ngx.log(ngx.ERR, "status_parsing_worker : " , status_parsing_worker );
+        status_parsing();
+        -- ngx.log(ngx.ERR, "status_parsing_worker : " , status_parsing_worker );
     end
 
 
     for kkk, vvv in ipairs(upstream_share:get_keys(100)) do
-
         local status = upstream_share:get(vvv)
-       -- ngx.log(ngx.INFO, worker_pid .. " key [" , kkk  , "] => ", vvv, " -> ", status)
+--        ngx.log(ngx.ERR, "worker_pid: " .. worker_pid .. " key [" , kkk  , "] => ", vvv, " -> ", status)
         local split_data = mysplit(vvv , ",")
 
         local pid           = split_data[1]
@@ -211,13 +214,9 @@ handler = function (premature)
                 else
                    upstream_share:delete(vvv)
                 end
-
             end
-
-
        end
    end
-
 
     if premature then
         return

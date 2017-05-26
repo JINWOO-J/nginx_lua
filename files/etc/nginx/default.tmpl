@@ -14,7 +14,7 @@ server {
     #error_log   /var/log/nginx/{{.Env.DOMAIN}}-error.log error;
 {{ if eq .Env.NGINX_LOG_OUTPUT "stdout" }}
     access_log /dev/stdout main;
-    error_log /dev/stderr error;
+    error_log /dev/stdout error;
 {{ else if eq  .Env.NGINX_LOG_OUTPUT "file"}}
     access_log  /var/log/nginx/{{.Env.DOMAIN}}-access.log main;
     error_log   /var/log/nginx/{{.Env.DOMAIN}}-error.log error;
